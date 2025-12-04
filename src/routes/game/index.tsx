@@ -1,10 +1,12 @@
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { HeartIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Draggable } from "@/components/draggable-trash";
 import { Droppable } from "@/components/droppable";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/game/")({
   component: RouteComponent,
@@ -85,8 +87,26 @@ function RouteComponent() {
             <span>
               Timer: <span className="font-semibold">{elapsedSeconds}s</span>
             </span>
-            <span>
-              Lives: <span className="font-semibold">{lives}</span>
+            <span className="flex items-center gap-1">
+              <span className="mr-1 text-xs uppercase tracking-wide">
+                Lives
+              </span>
+              {Array.from({ length: 3 }).map((_, index) => {
+                const heartNumber = index + 1;
+                const isActive = lives >= heartNumber;
+                return (
+                  <HeartIcon
+                    key={heartNumber}
+                    className={cn(
+                      "h-4 w-4",
+                      isActive
+                        ? "fill-red-500 text-red-500"
+                        : "fill-transparent text-muted-foreground",
+                    )}
+                    aria-hidden="true"
+                  />
+                );
+              })}
             </span>
           </div>
 
@@ -115,7 +135,7 @@ function RouteComponent() {
                   </p>
                 </div>
                 <div className="w-full rounded-lg rounded-t-none border-2 border-t-0 border-dashed p-4">
-                  <div className="flex min-h-[100px] w-full flex-wrap items-center justify-center gap-3">
+                  <div className="flex min-h-[45px] w-full flex-wrap items-center justify-center gap-3 md:min-h-[100px]">
                     {items
                       .filter((item) => assignments[item.id] === id)
                       .map((item) => (
