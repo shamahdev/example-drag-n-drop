@@ -8,6 +8,40 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
+function computeResult({
+  items,
+  assignments,
+  elapsedSeconds,
+  lives,
+}: {
+  items: readonly { id: string; type: string }[];
+  assignments: Record<string, string | null>;
+  elapsedSeconds: number;
+  lives: number;
+}) {
+  const totalCorrect = items.filter(
+    (item) => assignments[item.id] === item.type,
+  ).length;
+
+  // Score focuses on correctness first, then time, then remaining lives.
+  // - Up to 70 points from accuracy (all correct = 70)
+  // - Up to 20 points from time (20 - elapsedSeconds, minimum 0)
+  // - Up to 10 points from remaining lives (each life = +3.33)
+  // - If there are 0 correct answers, the score is always 0
+  let score = 0;
+  if (totalCorrect > 0) {
+    const accuracyScore = (totalCorrect / items.length) * 70;
+    const timeScore = Math.max(0, 20 - elapsedSeconds);
+    const livesScore = Math.min(lives, 3) * (10 / 3);
+    score = Math.round(accuracyScore + timeScore + livesScore);
+  }
+
+  return {
+    correct: totalCorrect,
+    score,
+  };
+}
+
 export const Route = createFileRoute("/game/")({
   component: RouteComponent,
 });
@@ -56,19 +90,21 @@ function RouteComponent() {
 
   const unassignedItems = items.filter((item) => assignments[item.id] === null);
 
-  function calculateResult(currentAssignments: Record<string, string | null>) {
-    const totalCorrect = items.filter(
-      (item) => currentAssignments[item.id] === item.type,
-    ).length;
+  const allPlaced = items.every((item) => assignments[item.id] !== null);
 
-    const clampedTime = Math.min(elapsedSeconds, 100);
-    const score = totalCorrect + (100 - clampedTime);
+  useEffect(() => {
+    if (isSubmitted || lives <= 0 || !allPlaced) return;
 
-    return {
-      correct: totalCorrect,
-      score,
-    };
-  }
+    const nextResult = computeResult({
+      items,
+      assignments,
+      elapsedSeconds,
+      lives,
+    });
+
+    setResult(nextResult);
+    setIsSubmitted(true);
+  }, [allPlaced, assignments, elapsedSeconds, isSubmitted, lives, items]);
 
   return (
     <main className="flex min-h-screen w-full items-center justify-center px-4">
@@ -153,17 +189,11 @@ function RouteComponent() {
               </Droppable>
             ))}
           </DndContext>
-
-          <div className="flex justify-end">
-            <Button size="sm" onClick={handleSubmit} disabled={isSubmitted}>
-              {isSubmitted ? "Submitted" : "Submit"}
-            </Button>
-          </div>
         </CardContent>
       </Card>
 
       {isSubmitted && result ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-3">
           <div className="w-full max-w-sm rounded-xl bg-background p-6 shadow-xl">
             <h3 className="font-semibold text-lg">Great job!</h3>
             <p className="mt-1 text-muted-foreground text-sm">
@@ -248,7 +278,12 @@ function RouteComponent() {
           const nextLives = Math.max(prevLives - 1, 0);
 
           if (nextLives <= 0) {
-            const nextResult = calculateResult(nextAssignments);
+            const nextResult = computeResult({
+              items,
+              assignments: nextAssignments,
+              elapsedSeconds,
+              lives: nextLives,
+            });
             setResult(nextResult);
             setIsSubmitted(true);
           }
@@ -259,15 +294,6 @@ function RouteComponent() {
 
       return nextAssignments;
     });
-  }
-
-  function handleSubmit() {
-    if (isSubmitted) return;
-
-    setIsSubmitted(true);
-
-    const nextResult = calculateResult(assignments);
-    setResult(nextResult);
   }
 
   function handleReset() {
