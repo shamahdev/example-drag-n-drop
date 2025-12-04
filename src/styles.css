@@ -203,3 +203,32 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .damage-flash {
+    animation: damage-flash 200ms ease-in-out 0s 2;
+  }
+
+  @keyframes damage-flash {
+    0% {
+      transform: translateX(0);
+      box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.3);
+    }
+    25% {
+      transform: translateX(-4px);
+      box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.4);
+    }
+    50% {
+      transform: translateX(4px);
+      box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.4);
+    }
+    75% {
+      transform: translateX(-2px);
+      box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.3);
+    }
+    100% {
+      transform: translateX(0);
+      box-shadow: 0 0 0 0 rgba(220, 38, 38, 0);
+    }
+  }
+}

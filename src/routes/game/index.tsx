@@ -1,6 +1,6 @@
 import { DndContext, type DragEndEvent } from "@dnd-kit/core";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Draggable } from "@/components/draggable-trash";
 import { Droppable } from "@/components/droppable";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -36,6 +36,9 @@ function RouteComponent() {
     correct: number;
     score: number;
   } | null>(null);
+  const [lives, setLives] = useState(3);
+  const [isDamaged, setIsDamaged] = useState(false);
+  const lastDamageTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (isSubmitted) return;
@@ -51,9 +54,26 @@ function RouteComponent() {
 
   const unassignedItems = items.filter((item) => assignments[item.id] === null);
 
+  function calculateResult(currentAssignments: Record<string, string | null>) {
+    const totalCorrect = items.filter(
+      (item) => currentAssignments[item.id] === item.type,
+    ).length;
+
+    const clampedTime = Math.min(elapsedSeconds, 100);
+    const score = totalCorrect + (100 - clampedTime);
+
+    return {
+      correct: totalCorrect,
+      score,
+    };
+  }
+
   return (
     <main className="flex min-h-screen w-full items-center justify-center px-4">
-      <Card className="w-full max-w-lg bg-white">
+      <Card
+        className={`w-full max-w-lg bg-white ${isDamaged ? "damage-flash" : ""}`}
+        onAnimationEnd={() => setIsDamaged(false)}
+      >
         <CardHeader>
           <h2 className="font-bold text-2xl">Drag & Drop Game</h2>
           <p className="text-muted-foreground text-sm">
@@ -65,15 +85,9 @@ function RouteComponent() {
             <span>
               Timer: <span className="font-semibold">{elapsedSeconds}s</span>
             </span>
-            {result ? (
-              <span>
-                Correct:{" "}
-                <span className="font-semibold">
-                  {result.correct}/{items.length}
-                </span>{" "}
-                | Score: <span className="font-semibold">{result.score}</span>
-              </span>
-            ) : null}
+            <span>
+              Lives: <span className="font-semibold">{lives}</span>
+            </span>
           </div>
 
           <DndContext onDragEnd={handleDragEnd}>
@@ -171,31 +185,69 @@ function RouteComponent() {
   );
 
   function handleDragEnd(event: DragEndEvent) {
+    if (isSubmitted || lives <= 0) return;
+
     const { active, over } = event;
     const activeId = String(active.id);
+    const item = items.find((it) => it.id === activeId);
 
     // If dropped over a container, assign that container.
     // Otherwise, send the item back to the unassigned pool.
-    setAssignments((prev) => ({
-      ...prev,
-      [activeId]: over ? String(over.id) : null,
-    }));
+    if (!over) {
+      setAssignments((prev) => ({
+        ...prev,
+        [activeId]: null,
+      }));
+      return;
+    }
+
+    const containerId = String(over.id);
+    const isCorrectPlacement = item ? item.type === containerId : false;
+
+    setAssignments((prev) => {
+      const nextAssignments = {
+        ...prev,
+        [activeId]: isCorrectPlacement ? containerId : null,
+      };
+
+      if (!isCorrectPlacement && item) {
+        const now = Date.now();
+        // Guard against duplicate drag-end events firing in quick succession
+        if (
+          lastDamageTimeRef.current &&
+          now - lastDamageTimeRef.current < 100
+        ) {
+          return nextAssignments;
+        }
+
+        lastDamageTimeRef.current = now;
+
+        // Wrong bin: send item back to initial pool, lose a life, and trigger damage effect
+        setIsDamaged(true);
+        setLives((prevLives) => {
+          const nextLives = Math.max(prevLives - 1, 0);
+
+          if (nextLives <= 0) {
+            const nextResult = calculateResult(nextAssignments);
+            setResult(nextResult);
+            setIsSubmitted(true);
+          }
+
+          return nextLives;
+        });
+      }
+
+      return nextAssignments;
+    });
   }
 
   function handleSubmit() {
+    if (isSubmitted) return;
+
     setIsSubmitted(true);
 
-    const totalCorrect = items.filter(
-      (item) => assignments[item.id] === item.type,
-    ).length;
-
-    const clampedTime = Math.min(elapsedSeconds, 100);
-    const score = totalCorrect + (100 - clampedTime);
-
-    setResult({
-      correct: totalCorrect,
-      score,
-    });
+    const nextResult = calculateResult(assignments);
+    setResult(nextResult);
   }
 
   function handleReset() {
@@ -210,6 +262,7 @@ function RouteComponent() {
     );
     setElapsedSeconds(0);
     setIsSubmitted(false);
+    setLives(3);
     setResult(null);
   }
 }
